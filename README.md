@@ -22,17 +22,17 @@ The Shadowrun Portrait Editor and Sprite Selector is an editor for Shadowrun on 
 
 ## Usage:
 
-- LOAD ROM. 
+**- LOAD ROM.** 
 	Choose your Shadowrun (.smd, .bin, .gen, and .md extensions accepted). Left column lets you select a party member. Center area will show your selected party member's portrait. Right column has portrait and sprite options.
-- EXPORT PNG: You can export the portrait data as a .png. Original portrait palettes will be shown on top right of editor.
+**- EXPORT PNG:** You can export the portrait data as a .png. Original portrait palettes will be shown on top right of editor.
 	NOTE: There are Shared Tiles (displayed in the editor) and transparencies across portraits, something I couldn't fix. This means that when selecting between Joshua's archetypes, tiles from his other archetypes will show. This is not a problem in game, however, as it only affects Joshua's archetype selection screen (only shown once in the game).
-- IMPORT PNG: Import your new or edited .png portrait.
-- HUD THUMBNAIL: Define the small HUD portrait area. The game takes coordinates from the larger portrait to show the smaller portrait in the vertical, right hand part of the HUD. You'll need to select an area of 4x4 tiles to use ingame. Once done, click on "Write Crop Byte". 
-- OVERWORLD SPRITE: Define what you want the characters to look like in the overworld.
-- PATCH ROM: prepares changed ROM data in memory (doesn't affect the original ROM).
-- SAVE ROM: Generate a ready-to-play "Shadowrun (USA)_patched" ROM (requires the original ROM and changes applied).
+**- IMPORT PNG:** Import your new or edited .png portrait.
+**- HUD THUMBNAIL:** Define the small HUD portrait area. The game takes coordinates from the larger portrait to show the smaller portrait in the vertical, right hand part of the HUD. You'll need to select an area of 4x4 tiles to use ingame. Once done, click on "Write Crop Byte". 
+**- OVERWORLD SPRITE:** Define what you want the characters to look like in the overworld.
+**- PATCH ROM:** prepares changed ROM data in memory (doesn't affect the original ROM).
+**- SAVE ROM:** Generate a ready-to-play "Shadowrun (USA)_patched" ROM (requires the original ROM and changes applied).
 	
-- NOTE: for best results, import custom portraits that don't stray too much from the original size, orientation and palettes, and also take into account an area of 4x4 tiles (8x8 pixels each) for the small portrait.
+**- NOTE:** for best results, import custom portraits that don't stray too much from the original size, orientation and palettes, and also take into account an area of 4x4 tiles (8x8 pixels each) for the small portrait.
 
 
 ## What the editor doesn't do:
