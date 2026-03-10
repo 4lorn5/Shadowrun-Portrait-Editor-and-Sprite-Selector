@@ -15,28 +15,7 @@ The Shadowrun Portrait Editor and Sprite Selector is an editor for Shadowrun on 
 
 ## Running the Editor:
 
-* HMTL: Just double-click, it will open in your default browser
-
-* Python: 
-
-```bash
-  Download it from python.org
-  Run installer
-  Check "Add Python to PATH"
-  Click Install
-```
-
-Go to the project directory:
-
-```bash
-  cd shadowrun-portrait-editor-folder
-```
-
-Run the .py file:
-
-```bash
-  python shadowrun_editor_gui.py
-```
+* HMTL: Just save file as .html and double-click from your local folder; it will open in your default browser.
 
 
 ## Usage:
