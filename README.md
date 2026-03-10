@@ -42,9 +42,9 @@ The Shadowrun Portrait Editor and Sprite Selector is an editor for Shadowrun on 
 
 ## What the editor doesn't do:
 
-- The editor does not support changing party member sprites to Gargoyles or Hellhounds, as these sprites/entities are buggy. You can still do it manually; enjoy changing your Mage or Shaman to a Hellhound, and watch them become forever frozen in the "pelt" sprite frame once they cast a spell.
+- The editor **does not support** changing party member sprites to Gargoyles or Hellhounds, as these sprites/entities are buggy. You can still do it manually; enjoy changing your Mage or Shaman to a Hellhound, and watch them become forever frozen in the "pelt" sprite frame once they cast a spell.
 
-- The editor also does not support changing palettes for portraits or sprites. This might come at a later time.
+- The editor also **does not support** changing palettes for portraits or sprites. This might come at a later time.
 
 
 ## Documentation:
@@ -95,7 +95,7 @@ Data for appearance of party members (before joining party/after dismissed):
 | Rianna Heartbane  |    `06 (0x73429)`     |   `20 (0x72C29)`   |
 | Stark             |    `03 (0x73529)`     |   `60 (0x72C29)`   |
 
-(*) (likely because they are the same values found in the main character blocks)
+_(*) (likely because they are the same values found in the main character blocks)_
 
 - There's no reference for Joshua in the second table since he is never "found" as an NPC; being the main character, he is always in the party, so there's no data for him outside the party. Because of this, any change to his sprite on the main character blocks is immediate and doesn't require additional updates elsewhere.
 
