@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadowrun Portrait Editor and Sprite Selector</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg:       #0a0c0f;
+    --panel:    #0f1318;
+    --border:   #1e2a1e;
+    --green:    #00ff41;
+    --green-dim:#00aa2a;
+    --green-dk: #003310;
+    --amber:    #ffaa00;
+    --red:      #ff3333;
+    --text:     #c8e6c8;
+    --text-dim: #5a7a5a;
+    --scanline: rgba(0,255,65,0.03);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* CRT scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+    background: repeating-linear-gradient(
+      0deg,
+      var(--scanline) 0px,
+      var(--scanline) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px 14px;
+    display: flex; align-items: center; gap: 20px;
+    background: linear-gradient(180deg, #0d1a0d 0%, var(--bg) 100%);
+  }
+  header .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 20px;
+    color: var(--green);
+    text-shadow: 0 0 20px rgba(0,255,65,0.5);
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  header .logo span { color: var(--amber); }
+  header .subtitle {
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  header .rom-status {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-dim);
+    box-shadow: none;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .status-dot.active {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.5; }
+  }
+  #rom-label { color: var(--text-dim); font-size: 11px; }
+
+  /* ── Layout ── */
+  .app {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 61px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+    padding: 14px;
+  }
+  .sidebar-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* ROM load */
+  .load-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--green-dk);
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .load-btn:hover {
+    background: var(--green-dim);
+    color: #000;
+    box-shadow: 0 0 12px rgba(0,255,65,0.3);
+  }
+
+  /* Character list */
+  .char-list { display: flex; flex-direction: column; gap: 3px; }
+  .char-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.1s;
+    border-radius: 2px;
+    position: relative;
+  }
+  .char-item:hover { border-color: var(--green-dk); background: rgba(0,255,65,0.04); }
+  .char-item.active {
+    border-color: var(--green-dim);
+    background: var(--green-dk);
+  }
+  .char-item.active::before {
+    content: '▶';
+    position: absolute; left: -1px;
+    color: var(--green);
+    font-size: 8px;
+  }
+  .char-thumb {
+    width: 32px; height: 40px;
+    image-rendering: pixelated;
+    border: 1px solid var(--border);
+    background: #000;
+    flex-shrink: 0;
+  }
+  .char-info { flex: 1; min-width: 0; }
+  .char-name {
+    color: var(--text);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .char-group {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .char-group.A { color: #ff8844; }
+  .char-group.B { color: #44aaff; }
+  .char-group.C { color: #88ff88; }
+
+  /* ── Main area ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .toolbar-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    color: var(--green);
+    letter-spacing: 2px;
+    margin-right: 4px;
+  }
+  .toolbar-sep { width: 1px; height: 24px; background: var(--border); }
+  .btn {
+    padding: 7px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--green-dim);
+    color: var(--green);
+    background: var(--green-dk);
+  }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn.primary {
+    border-color: var(--green-dim);
+    color: var(--green);
+    background: var(--green-dk);
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: var(--green-dim);
+    color: #000;
+    box-shadow: 0 0 12px rgba(0,255,65,0.4);
+  }
+  .btn.danger { border-color: #441111; color: #884444; }
+  .btn.danger:hover:not(:disabled) {
+    border-color: var(--red);
+    color: var(--red);
+    background: #1a0000;
+  }
+  .zoom-label { color: var(--text-dim); font-size: 11px; }
+  .zoom-controls { display: flex; gap: 2px; }
+  .zoom-btn {
+    width: 26px; height: 26px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.1s;
+    line-height: 1;
+  }
+  .zoom-btn:hover { border-color: var(--green-dim); color: var(--green); }
+  #zoom-val { color: var(--green); min-width: 36px; text-align: center; font-size: 12px; }
+
+  /* ── Content ── */
+  .content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    overflow: hidden;
+  }
+
+  /* Canvas area */
+  .canvas-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 24px;
+    background:
+      radial-gradient(ellipse at center, #0d1a0d 0%, var(--bg) 70%),
+      repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(0,255,65,0.03) 31px, rgba(0,255,65,0.03) 32px),
+      repeating-linear-gradient(90deg, transparent, transparent 31px, rgba(0,255,65,0.03) 31px, rgba(0,255,65,0.03) 32px);
+    position: relative;
+  }
+  .canvas-wrap {
+    position: relative;
+    display: inline-block;
+  }
+  #portrait-canvas {
+    image-rendering: pixelated;
+    display: block;
+    cursor: crosshair;
+  }
+  /* tile grid overlay */
+  .tile-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .tile-overlay.show { opacity: 1; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    color: var(--text-dim);
+  }
+  .empty-state .big { font-size: 40px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-state p { font-size: 12px; letter-spacing: 1px; line-height: 2; }
+  .empty-state .hint { color: var(--green-dim); margin-top: 8px; }
+
+  /* ── Right panel ── */
+  .right-panel {
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 14px;
+  }
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  /* Palette display */
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .pal-swatch {
+    aspect-ratio: 1;
+    border: 1px solid #222;
+    cursor: default;
+    position: relative;
+    transition: transform 0.1s;
+  }
+  .pal-swatch:hover { transform: scale(1.1); z-index: 1; }
+  .pal-swatch::after {
+    content: attr(data-idx);
+    position: absolute;
+    bottom: 1px; right: 2px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.4);
+    line-height: 1;
+  }
+
+  /* Stats / info */
+  .info-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    align-items: baseline;
+  }
+  .info-key { color: var(--text-dim); font-size: 11px; }
+  .info-val { color: var(--text); font-size: 11px; font-family: 'Share Tech Mono', monospace; }
+  .info-val.green { color: var(--green); }
+  .info-val.amber { color: var(--amber); }
+
+  /* Pixel info */
+  .pixel-info {
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    min-height: 36px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pixel-dot {
+    width: 14px; height: 14px;
+    border: 1px solid #333;
+    flex-shrink: 0;
+  }
+
+  /* Log */
+  .log-area {
+    flex: 1;
+    padding: 10px 14px;
+    overflow-y: auto;
+    min-height: 80px;
+    max-height: 160px;
+  }
+  .log-line {
+    font-size: 11px;
+    line-height: 1.8;
+    color: var(--text-dim);
+    padding: 1px 0;
+  }
+  .log-line.ok   { color: var(--green-dim); }
+  .log-line.warn { color: var(--amber); }
+  .log-line.err  { color: var(--red); }
+  .log-line.info { color: var(--text); }
+
+  /* ── HUD Thumbnail panel ── */
+  .hud-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hud-preview-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .hud-thumb-wrap {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  .hud-thumb-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  #hud-canvas {
+    image-rendering: pixelated;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  .crop-controls {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .crop-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .crop-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    flex-shrink: 0;
+    width: 52px;
+  }
+  .crop-val {
+    font-size: 11px;
+    color: var(--amber);
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .crop-btn {
+    background: var(--green-dk);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: inherit;
+    font-size: 13px;
+    width: 22px; height: 22px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .crop-btn:hover { background: #005520; }
+  .crop-btn:disabled { opacity: 0.3; cursor: default; }
+  .crop-select-btn {
+    background: transparent;
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.15s, border-color 0.15s;
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  .crop-select-btn:hover:not(:disabled) { background: rgba(0,255,65,0.08); }
+  .crop-select-btn:disabled { opacity: 0.3; cursor: default; }
+  .crop-select-btn.active {
+    background: rgba(0,255,65,0.15);
+    border-color: var(--green);
+    color: var(--green);
+    animation: pulse 1s infinite;
+  }
+  /* Canvas cursor in crop-select mode */
+  .canvas-wrap.crop-select-mode { cursor: crosshair; }
+
+  .crop-write-btn {
+    background: transparent;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.15s;
+    width: 100%;
+  }
+  .crop-write-btn:hover:not(:disabled) { background: rgba(255,170,0,0.12); }
+  .crop-write-btn:disabled { opacity: 0.3; cursor: default; }
+  .archetype-warning {
+    background: rgba(255,51,51,0.07);
+    border: 1px solid rgba(255,51,51,0.3);
+    border-radius: 3px;
+    padding: 8px 10px;
+    font-size: 10px;
+    color: #ff7777;
+    line-height: 1.6;
+    letter-spacing: 0.3px;
+  }
+  .archetype-warning strong {
+    color: var(--red);
+    display: block;
+    margin-bottom: 3px;
+    letter-spacing: 1px;
+  }
+
+  /* Grid toggle */
+  .toggle-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-dim);
+  }
+  .toggle {
+    width: 32px; height: 16px;
+    background: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--green-dk); border-color: var(--green-dim); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle.on::after { transform: translateX(16px); background: var(--green); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--green-dk); }
+
+  /* Hidden file inputs */
+  input[type=file] { display: none; }
+
+  /* No-ROM overlay */
+  #no-rom {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10,12,15,0.85);
+    backdrop-filter: blur(2px);
+    z-index: 10;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+  #no-rom.hidden { display: none; }
+  #no-rom .big-prompt {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    color: var(--green);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  #no-rom .sub { color: var(--text-dim); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">SHADOW<span>RUN</span></div>
+    <div class="subtitle">Shadowrun Portrait Editor and Sprite Selectorr</div>
+  </div>
+  <div class="rom-status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="rom-label">NO ROM LOADED</span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- Sidebar: ROM load + character list -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">ROM File</div>
+      <button class="load-btn" onclick="document.getElementById('rom-input').click()">
+        ▶ Load ROM
+      </button>
+      <input type="file" id="rom-input" accept=".md,.bin,.gen,.smd">
+    </div>
+    <div class="sidebar-section" style="flex:1">
+      <div class="sidebar-label">Characters</div>
+      <div class="char-list" id="char-list"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="toolbar">
+      <span class="toolbar-title" id="char-title">—</span>
+      <div class="toolbar-sep"></div>
+      <button class="btn primary" id="btn-export" disabled onclick="exportPNG()">↓ Export PNG</button>
+      <button class="btn" id="btn-import-png" disabled onclick="document.getElementById('png-input').click()">↑ Import PNG</button>
+      <input type="file" id="png-input" accept=".png">
+      <div class="toolbar-sep"></div>
+      <button class="btn primary" id="btn-patch" disabled onclick="patchROM()">⬡ Patch ROM</button>
+      <button class="btn" id="btn-save-rom" disabled onclick="saveROM()">↓ Save ROM</button>
+      <div class="toolbar-sep"></div>
+      <span class="zoom-label">ZOOM</span>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="setZoom(zoom-1)">−</button>
+        <span id="zoom-val">4×</span>
+        <button class="zoom-btn" onclick="setZoom(zoom+1)">+</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- Canvas -->
+      <div class="canvas-area" id="canvas-area">
+        <div id="no-rom">
+          <div class="big-prompt">Load a ROM to begin</div>
+          <div class="sub">Shadowrun (USA).md</div>
+        </div>
+        <div class="canvas-wrap" id="canvas-wrap" style="display:none">
+          <canvas id="portrait-canvas"></canvas>
+          <canvas id="tile-overlay" class="tile-overlay"></canvas>
+        </div>
+        <div class="empty-state" id="empty-state" style="display:none">
+          <div class="big">◈</div>
+          <p>Select a character from the sidebar</p>
+          <p class="hint">↑ or use the list on the left</p>
+        </div>
+      </div>
+
+      <!-- Right panel -->
+      <div class="right-panel">
+        <div class="pixel-info" id="pixel-info">
+          <div class="pixel-dot" id="pixel-dot"></div>
+          <span id="pixel-text">hover over portrait</span>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-label">Palette</div>
+          <div class="palette-grid" id="palette-grid"></div>
+          <div style="margin-top:10px; font-size:10px; color:var(--text-dim); letter-spacing:1px;">
+            PALETTE GROUP <span id="pal-group-label" style="color:var(--amber)">—</span>
+            &nbsp;·&nbsp; SHARED WITH <span id="pal-shared-label" style="color:var(--text-dim)">—</span>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-label">Character Info</div>
+          <div class="info-grid" id="info-grid">
+            <span class="info-key">STATUS</span>
+            <span class="info-val" id="info-status">—</span>
+          </div>
+        </div>
+
+        <div class="panel-section" id="hud-section" style="display:none">
+          <div class="panel-label">HUD Thumbnail</div>
+          <div class="hud-panel">
+            <div class="hud-preview-row">
+              <div class="hud-thumb-wrap">
+                <canvas id="hud-canvas" width="64" height="80" style="width:64px;height:80px"></canvas>
+                <div class="hud-thumb-label">32×32 crop</div>
+              </div>
+              <div class="crop-controls">
+                <div class="crop-row">
+                  <span class="crop-label">TILE OFS</span>
+                  <span class="crop-val" id="crop-val">0x04</span>
+                </div>
+                <div class="crop-row">
+                  <span class="crop-label">ROM ADDR</span>
+                  <span class="info-val" id="crop-addr" style="font-size:10px">—</span>
+                </div>
+                <div class="crop-row">
+                  <span class="crop-label">STORED</span>
+                  <span class="info-val" id="crop-rom-val" style="font-size:10px;color:var(--text-dim)">—</span>
+                </div>
+                <button class="crop-select-btn" id="btn-select-crop" onclick="enterCropSelect()" disabled>
+                  ◈ SELECT AREA
+                </button>
+                <button class="crop-write-btn" id="btn-write-crop" onclick="writeCrop()" disabled>
+                  ⬡ WRITE CROP BYTE
+                </button>
+              </div>
+            </div>
+            <div id="archetype-warning" style="display:none" class="archetype-warning">
+              <strong>⚠ ARCHETYPE SHARED VRAM</strong>
+              The archetype selection screen loads one shared VRAM tileset for all three Joshua variants.
+              Patching one portrait will affect all three on that screen.
+              Only the in-game HUD portrait is fully independent per archetype.
+            </div>
+          </div>
+        </div>
+
+        <!-- Sprite ID Selector -->
+        <div class="panel-section" id="sprite-section" style="display:none">
+          <div class="panel-label">Overworld Sprite</div>
+          <div style="padding:10px">
+            <label style="display:block;margin-bottom:8px;color:var(--text-dim);font-size:11px;letter-spacing:1px">
+              SPRITE ID (offset +0x09)
+            </label>
+            <select id="sprite-select" onchange="updateSpriteID()" disabled
+                    style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);
+                           color:var(--text);font-family:inherit;font-size:12px;cursor:pointer">
+              <option value="03">0x03 - Joshua (red vest)</option>
+              <option value="04">0x04 - Troll/ork punk</option>
+              <option value="05">0x05 - Lone Star guard</option>
+              <option value="06">0x06 - Elf/armor</option>
+              <option value="07">0x07 - Ganger (eye-fiver)</option>
+              <option value="08">0x08 - Ganger (halloweener)</option>
+              <option value="09">0x09 - Trenchcoat + hat</option>
+              <option value="0A">0x0A - Woman (normal)</option>
+              <option value="0B">0x0B - Dwarf/civilian</option>
+            </select>
+            <div style="margin-top:8px;font-size:10px;color:var(--text-dim);line-height:1.4">
+              Controls which sprite appears in overworld/map view
+            </div>
+            <div style="margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);font-size:10px">
+              <div style="color:var(--text-dim);margin-bottom:4px">ROM ADDRESS:</div>
+              <div id="sprite-addr" style="color:var(--green);font-family:monospace">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NPC Sprite ID Selector -->
+        <div class="panel-section" id="npc-sprite-section" style="display:none">
+          <div class="panel-label">NPC Sprite (Pre-Recruitment)</div>
+          <div style="padding:10px">
+            <label style="display:block;margin-bottom:8px;color:var(--text-dim);font-size:11px;letter-spacing:1px">
+              NPC SPRITE ID (lone11 block)
+            </label>
+            <select id="npc-sprite-select" onchange="updateNPCSpriteID()" disabled
+                    style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);
+                           color:var(--text);font-family:inherit;font-size:12px;cursor:pointer">
+              <option value="03">0x03 - Joshua (red vest)</option>
+              <option value="04">0x04 - Troll/ork punk</option>
+              <option value="05">0x05 - Lone Star guard</option>
+              <option value="06">0x06 - Elf/armor</option>
+              <option value="07">0x07 - Ganger (eye-fiver)</option>
+              <option value="08">0x08 - Ganger (halloweener)</option>
+              <option value="09">0x09 - Trenchcoat + hat</option>
+              <option value="0A">0x0A - Woman (normal)</option>
+              <option value="0B">0x0B - Dwarf/civilian</option>
+            </select>
+            <div style="margin-top:8px;font-size:10px;color:var(--text-dim);line-height:1.4">
+              ⚠️ Controls sprite BEFORE recruitment only
+            </div>
+            <div style="margin-top:8px;padding:8px;background:var(--bg);border:1px solid var(--border);font-size:10px">
+              <div style="color:var(--text-dim);margin-bottom:4px">ROM ADDRESS:</div>
+              <div id="npc-sprite-addr" style="color:var(--green);font-family:monospace">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-label">Display</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="toggle-row">
+              <div class="toggle" id="toggle-grid" onclick="toggleGrid()"></div>
+              <span>Tile grid</span>
+              <input type="color" id="grid-color-picker" value="#00ff41"
+                title="Grid colour"
+                oninput="setGridColor(this.value)"
+                style="margin-left:auto;width:22px;height:22px;border:1px solid var(--border);
+                       background:none;padding:1px;cursor:pointer;border-radius:2px;flex-shrink:0">
+            </div>
+            <div class="toggle-row">
+              <div class="toggle on" id="toggle-shared" onclick="toggleShared()"></div>
+              <span>Highlight shared tiles</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section" style="flex:1">
+          <div class="panel-label">Log</div>
+          <div class="log-area" id="log-area"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+const SHARED = 0x06A5BE;
+
+const PALETTES = {
+  A: [
+    [0,0,0],[0,0,0],[36,36,36],[72,72,72],
+    [144,144,144],[252,252,252],[216,180,144],[180,108,72],
+    [180,36,36],[216,144,72],[0,72,108],[252,0,0],
+    [72,72,36],[108,144,72],[252,216,0],[108,36,36],
+  ],
+  B: [
+    [0,0,0],[0,0,0],[36,36,36],[72,72,72],
+    [144,144,144],[252,252,252],[216,144,108],[144,72,36],
+    [216,0,0],[0,36,180],[144,108,72],[36,216,36],
+    [108,72,36],[36,72,0],[216,144,216],[144,36,36],
+  ],
+  C: [
+    [0,0,0],[0,0,0],[36,36,36],[72,72,72],
+    [144,144,144],[252,252,252],[144,180,216],[72,108,144],
+    [216,180,72],[144,108,0],[72,72,36],[108,72,144],
+    [108,144,72],[72,108,36],[180,144,0],[36,72,108],
+  ],
+};
+
+const CHARACTERS = {
+  // charBlock = ROM address of the character's 0x80-byte data block
+  // crop      = byte at +0x4F in block: tile-index offset for the 4×4 HUD thumbnail
+  // archetype = true if this character shares VRAM tiles with other archetypes
+  freya:          { label:'Freya',          group:'C', charBlock:0x073320, crop:0x04, npcSprite:0x17315 },
+  ilene:          { label:'Ilene Two Fists',group:'A', charBlock:0x073220, crop:0x04, npcSprite:0x172CB },
+  joshua_decker:  { label:'Joshua Decker',  group:'A', charBlock:0x072A20, crop:0x04, archetype:true },
+  joshua_samurai: { label:'Joshua Samurai', group:'A', charBlock:0x072920, crop:0x04, archetype:true },
+  joshua_shaman:  { label:'Joshua Shaman',  group:'A', charBlock:0x072B20, crop:0x04, archetype:true },
+  petr:           { label:'Petr',           group:'B', charBlock:0x072F20, crop:0x14, npcSprite:0x171ED },
+  phantom:        { label:'Phantom',        group:'A', charBlock:0x073120, crop:0x04, npcSprite:0x17281 },
+  rianna:         { label:'Rianna',         group:'A', charBlock:0x073420, crop:0x04, npcSprite:0x1735F },
+  ricky:          { label:'Ricky',          group:'A', charBlock:0x072C20, crop:0x14, npcSprite:0x1710F },
+  stark:          { label:'Stark',          group:'B', charBlock:0x073520, crop:0x08, npcSprite:0x173A9 },
+  trent:          { label:'Trent',          group:'C', charBlock:0x072E20, crop:0x14, npcSprite:0x171A3 },
+  walking_bear:   { label:'Walking Bear',   group:'B', charBlock:0x073020, crop:0x14, npcSprite:0x17237 },
+  winston:        { label:'Winston',        group:'C', charBlock:0x072D20, crop:0x04, npcSprite:0x17159 },
+};
+
+const TILE_ADDRS = {"freya": [458010, 458042, 458074, 458106, 458138, 458170, 458202, 435646, 458234, 458266, 458298, 458330, 458362, 458394, 458426, 458458, 458490, 458522, 458554, 458586, 458618, 458650, 458682, 458714, 458746, 458778, 458810, 458842, 458874, 458906, 458938, 458970, 459002, 459034, 459066, 459098, 459130, 459162, 459194, 459226, 459258, 459290, 459322, 459354, 459386, 459418, 459450, 459482, 459514, 459546, 459578, 459610, 459642, 459674, 459706, 459738, 459770, 459802, 459834, 459866, 459898, 459930, 459962, 459994, 435646, 460026, 460058, 460090, 460122, 460154, 460186, 460218, 435646, 460250, 460282, 460314, 460346, 641050, 435646, 435646], "ilene": [448794, 435646, 448826, 448858, 448890, 448922, 435646, 448954, 448986, 449018, 449050, 449082, 449114, 449146, 449178, 449210, 449242, 435646, 449274, 449306, 449338, 449370, 449402, 455706, 437850, 449434, 449466, 449498, 449530, 449562, 449594, 449626, 449658, 449690, 449722, 449754, 449786, 449818, 449850, 449882, 449914, 449946, 449978, 450010, 450042, 450074, 450106, 450138, 435646, 450170, 450202, 450234, 450266, 450298, 450330, 450362, 450394, 450426, 450458, 450490, 450522, 450554, 450586, 435646, 450618, 450650, 450682, 450714, 450746, 450778, 450810, 435646, 435646, 435646, 450842, 450874, 450906, 450938, 450970, 435646], "joshua_decker": [435646, 435646, 437690, 437722, 437754, 437786, 437658, 435646, 438266, 438298, 438330, 438362, 438394, 438426, 438202, 438234, 438906, 435646, 438938, 438970, 439002, 439034, 438842, 438874, 396554, 439546, 439578, 439610, 439642, 439674, 439450, 439482, 440122, 440154, 440186, 440218, 440250, 440282, 440314, 440346, 440858, 440890, 440922, 440954, 440986, 441018, 441050, 441082, 441626, 441658, 441690, 441722, 441754, 441786, 441818, 441850, 442394, 442426, 442458, 442490, 442522, 442554, 442586, 442618, 443162, 443194, 443226, 443258, 443290, 443322, 443354, 443386, 443898, 443930, 443962, 443994, 444026, 444058, 444090, 444122], "joshua_samurai": [435646, 435646, 437530, 437562, 437594, 437626, 437658, 435646, 438010, 438042, 438074, 438106, 438138, 438170, 438202, 438234, 438650, 438682, 438714, 438746, 438778, 438810, 438842, 438874, 439258, 439290, 439322, 439354, 439386, 439418, 439450, 439482, 439898, 439930, 439962, 439994, 440026, 440058, 440282, 440090, 440602, 440634, 440666, 440698, 440730, 440762, 440794, 440826, 441370, 441402, 441434, 441466, 441498, 441530, 441562, 441594, 442138, 442170, 442202, 442234, 442266, 442298, 442330, 442362, 442906, 442938, 442970, 443002, 443034, 443066, 443098, 443130, 443642, 443674, 443706, 443738, 443770, 443802, 443834, 443866], "joshua_shaman": [437818, 437850, 437882, 437914, 437946, 437978, 437658, 435646, 438458, 438490, 438522, 438554, 438586, 438618, 438202, 438234, 439066, 439098, 439130, 439162, 439194, 439226, 438842, 438874, 439706, 439738, 439770, 439802, 439834, 439866, 439450, 439482, 440378, 440410, 440442, 440474, 440506, 440538, 440282, 440570, 441114, 441146, 441178, 441210, 441242, 441274, 441306, 441338, 441882, 441914, 441946, 441978, 442010, 442042, 442074, 442106, 442650, 442682, 442714, 442746, 442778, 442810, 442842, 442874, 435646, 443418, 443450, 443482, 443514, 443546, 443578, 443610, 435646, 444154, 444186, 444218, 444250, 444282, 444314, 444346], "petr": [435646, 435646, 435646, 435646, 435646, 435646, 435646, 435646, 435646, 460378, 460410, 460442, 460474, 435646, 435646, 435646, 460506, 460538, 460570, 460602, 460634, 460666, 435646, 435646, 460698, 460730, 460762, 460794, 460826, 460858, 435646, 435646, 460890, 460922, 460954, 460986, 461018, 461050, 461082, 461114, 461146, 461178, 461210, 461242, 461274, 461306, 461338, 461370, 461402, 461434, 461466, 461498, 461530, 461562, 461594, 461626, 461658, 461690, 461722, 461754, 461786, 461818, 461850, 461882, 461914, 461946, 461978, 462010, 462042, 462074, 462106, 462138, 462170, 462202, 462234, 462266, 462298, 462330, 462362, 435646], "phantom": [435646, 446458, 446490, 446522, 446554, 446586, 435646, 435646, 435646, 435646, 446618, 446650, 446682, 446714, 446746, 435646, 435646, 446778, 446810, 446842, 446874, 446906, 446938, 446970, 447002, 447034, 447066, 447098, 447130, 447162, 447194, 447226, 447258, 447290, 447322, 447354, 447386, 447418, 447450, 447482, 447514, 447546, 447578, 447610, 447642, 447674, 447706, 447738, 447770, 447802, 447834, 447866, 447898, 447930, 447962, 447994, 448026, 448058, 448090, 448122, 448154, 448186, 448218, 448250, 448282, 448314, 448346, 448378, 448410, 448442, 448474, 448506, 448538, 448570, 448602, 448634, 448666, 448698, 448730, 448762], "rianna": [451002, 451034, 451066, 451098, 451130, 451162, 451194, 451226, 451258, 451290, 451322, 451354, 451386, 451418, 451450, 451482, 451514, 451546, 451578, 451610, 451642, 451674, 451706, 451738, 451770, 451802, 451834, 451866, 451898, 451930, 435646, 451962, 451994, 452026, 452058, 452090, 452122, 452154, 452186, 452218, 452250, 452282, 452314, 452346, 452378, 452410, 452442, 452474, 452506, 452538, 452570, 452602, 452634, 452666, 452698, 452730, 452762, 452794, 452826, 452858, 452890, 452922, 452954, 452986, 453018, 453050, 453082, 453114, 453146, 453178, 453210, 453242, 453274, 453306, 453338, 453370, 453402, 453434, 453466, 453498], "ricky": [435646, 435646, 435646, 435646, 435646, 435646, 444378, 444410, 435646, 435646, 444442, 444474, 444506, 435646, 444538, 444570, 435646, 435646, 444602, 444634, 444666, 444698, 444730, 444762, 444794, 444826, 444858, 444890, 444922, 444954, 444986, 445018, 445050, 445082, 445114, 445146, 445178, 445210, 445242, 445274, 445306, 445338, 445370, 445402, 445434, 445466, 445498, 445530, 445562, 445594, 445626, 445658, 445690, 445722, 445754, 445786, 445818, 445850, 445882, 445914, 445946, 445978, 446010, 446042, 435646, 446074, 446106, 446138, 446170, 446202, 446234, 446266, 435646, 435646, 446298, 446330, 446362, 446394, 446426, 435646], "stark": [464794, 464826, 435646, 464858, 464890, 464922, 464954, 435646, 464986, 465018, 465050, 465082, 465114, 465146, 465178, 465210, 465242, 465274, 465306, 465338, 465370, 465402, 465434, 465466, 465498, 465530, 465562, 465594, 465626, 465658, 465690, 465722, 465754, 465786, 465818, 465850, 465882, 465914, 465946, 435646, 465978, 466010, 466042, 466074, 466106, 466138, 466170, 466202, 466234, 466266, 466298, 466330, 466362, 466394, 466426, 466458, 466490, 466522, 466554, 466586, 466618, 466650, 466682, 466714, 466746, 466778, 466810, 466842, 466874, 466906, 466938, 435646, 466970, 467002, 467034, 467066, 467098, 467130, 467162, 435646], "trent": [435646, 435646, 435646, 455930, 455962, 455994, 435646, 435646, 435646, 456026, 456058, 456090, 456122, 446586, 435646, 435646, 435646, 456154, 456186, 456218, 456250, 456282, 456314, 435646, 456346, 456378, 456410, 456442, 456474, 456506, 435646, 435646, 456538, 456570, 456602, 456634, 456666, 456698, 456730, 435646, 456762, 456794, 456826, 456858, 456890, 456922, 456954, 456986, 457018, 457050, 457082, 457114, 457146, 457178, 457210, 457242, 457274, 457306, 457338, 457370, 457402, 457434, 457466, 457498, 457530, 457562, 457594, 457626, 457658, 457690, 457722, 457754, 435646, 457786, 457818, 457850, 457882, 457914, 457946, 457978], "walking_bear": [462394, 462426, 462458, 462490, 462522, 462554, 435646, 435646, 462586, 462618, 462650, 462682, 462714, 462746, 435646, 435646, 462778, 444458, 462810, 462842, 462874, 462906, 462938, 462970, 463002, 463034, 463066, 463098, 463130, 463162, 463194, 463226, 463258, 463290, 463322, 463354, 463386, 463418, 463450, 463482, 463514, 463546, 463578, 463610, 463642, 463674, 463706, 463738, 463770, 463802, 463834, 463866, 463898, 463930, 463962, 463994, 464026, 464058, 464090, 464122, 464154, 464186, 464218, 464250, 464282, 464314, 464346, 464378, 464410, 464442, 464474, 464506, 464538, 464570, 464602, 464634, 464666, 464698, 464730, 464762], "winston": [435646, 435646, 453530, 453562, 453594, 453626, 453658, 453690, 435646, 435646, 453722, 453754, 453786, 453818, 453850, 453882, 453914, 453946, 453978, 454010, 454042, 454074, 454106, 454138, 454170, 454202, 454234, 454266, 454298, 454330, 454362, 454394, 454426, 454458, 454490, 454522, 454554, 454586, 454618, 454650, 454682, 454714, 454746, 454778, 454810, 454842, 454874, 454906, 454938, 454970, 455002, 455034, 455066, 455098, 455130, 455162, 455194, 455226, 455258, 455290, 455322, 455354, 455386, 455418, 455450, 455482, 455514, 455546, 455578, 455610, 455642, 455674, 455706, 435646, 455738, 455770, 455802, 455834, 455866, 455898]};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let romBytes    = null;    // Uint8Array - working copy
+let origRom     = null;    // Uint8Array - pristine original
+let romFilename = '';
+let currentChar = null;
+let zoom        = 4;
+let showGrid    = false;
+let showShared  = true;
+let isDirty     = false;   // pending patches to write
+let pendingPixels = null;  // modified pixel data for current char
+let cropOffset    = 0x04;  // current (possibly unsaved) HUD crop byte: high nibble=nametable row, low nibble=nametable col (portrait starts at nametable col 2)
+let cropSelectMode = false; // true while user is placing the crop window on the portrait
+let previewPixels = null;   // RGBA pixel buffer of an imported-but-not-yet-patched portrait
+let gridColor     = '#00ff41'; // user-chosen tile grid colour
+
+// ── ROM I/O ───────────────────────────────────────────────────────────────────
+document.getElementById('rom-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    origRom = new Uint8Array(ev.target.result);
+    romBytes = new Uint8Array(origRom);
+    romFilename = file.name;
+    document.getElementById('rom-label').textContent = file.name;
+    document.getElementById('status-dot').classList.add('active');
+    document.getElementById('no-rom').classList.add('hidden');
+    document.getElementById('empty-state').style.display = 'flex';
+    log(`ROM loaded: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`, 'ok');
+    buildCharList();
+    e.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+// ── Build sidebar ─────────────────────────────────────────────────────────────
+function buildCharList() {
+  const list = document.getElementById('char-list');
+  list.innerHTML = '';
+  Object.entries(CHARACTERS).forEach(([id, ch]) => {
+    const item = document.createElement('div');
+    item.className = 'char-item';
+    item.dataset.id = id;
+    item.innerHTML = `
+      <canvas class="char-thumb" id="thumb-${id}" width="32" height="40"></canvas>
+      <div class="char-info">
+        <div class="char-name">${ch.label}</div>
+        <div class="char-group ${ch.group}">Group ${ch.group}</div>
+      </div>`;
+    item.addEventListener('click', () => selectChar(id));
+    list.appendChild(item);
+    renderThumb(id);
+  });
+}
+
+function renderThumb(id) {
+  const canvas = document.getElementById(`thumb-${id}`);
+  if (!canvas || !romBytes) return;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(32, 40);
+  const palette = PALETTES[CHARACTERS[id].group];
+  const addrs = TILE_ADDRS[id];
+
+  for (let ti = 0; ti < 80; ti++) {
+    const addr = addrs[ti];
+    if (addr === SHARED) continue;
+    const trow = Math.floor(ti / 8), tcol = ti % 8;
+    // render at 4x8 (half size): just top-left pixel of each tile
+    for (let py = 0; py < 8; py++) {
+      const b0 = romBytes[addr + py*4], b1 = romBytes[addr+py*4+1],
+            b2 = romBytes[addr+py*4+2], b3 = romBytes[addr+py*4+3];
+      const row = [(b0>>4)&0xF,b0&0xF,(b1>>4)&0xF,b1&0xF,(b2>>4)&0xF,b2&0xF,(b3>>4)&0xF,b3&0xF];
+      for (let px = 0; px < 8; px++) {
+        // Scale from 64x80 to 32x40 (half)
+        const sx = tcol*4 + Math.floor(px/2);
+        const sy = trow*4 + Math.floor(py/2);
+        if (sx >= 32 || sy >= 40) continue;
+        const oi = (sy*32 + sx)*4;
+        const [r,g,b] = palette[row[px]];
+        img.data[oi]=r; img.data[oi+1]=g; img.data[oi+2]=b; img.data[oi+3]=255;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// ── Select character ──────────────────────────────────────────────────────────
+function selectChar(id) {
+  // Clean up any active crop-select session from a previous character
+  if (cropSelectMode) {
+    cropSelectMode = false;
+    const btn = document.getElementById('btn-select-crop');
+    if (btn) { btn.classList.remove('active'); btn.textContent = '◈ SELECT AREA'; btn.onclick = enterCropSelect; }
+    document.getElementById('canvas-wrap').classList.remove('crop-select-mode');
+  }
+  currentChar = id;
+  pendingPixels = null;
+  previewPixels = null;
+  isDirty = false;
+
+  document.querySelectorAll('.char-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === id);
+  });
+
+  const ch = CHARACTERS[id];
+  document.getElementById('char-title').textContent = ch.label.toUpperCase();
+  document.getElementById('canvas-wrap').style.display = 'block';
+  document.getElementById('empty-state').style.display = 'none';
+
+  // Enable buttons
+  ['btn-export','btn-import-png','btn-patch'].forEach(b =>
+    document.getElementById(b).disabled = !romBytes);
+  document.getElementById('btn-save-rom').disabled = true;
+
+  // Render portrait
+  renderPortrait(id);
+  buildPalettePanel(id);
+  buildInfoPanel(id);
+  buildHUDPanel(id);
+  loadSpriteID();
+  log(`Selected: ${ch.label}`, 'info');
+}
+
+// ── Render portrait ───────────────────────────────────────────────────────────
+function renderPortrait(id) {
+  const canvas = document.getElementById('portrait-canvas');
+  const overlay = document.getElementById('tile-overlay');
+  const palette = PALETTES[CHARACTERS[id].group];
+  const addrs = TILE_ADDRS[id];
+
+  canvas.width  = 64 * zoom;
+  canvas.height = 80 * zoom;
+  overlay.width  = 64 * zoom;
+  overlay.height = 80 * zoom;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  // If the user has imported a PNG but not yet patched, show that preview
+  // rather than re-reading from ROM (which would lose the preview on every toggle/zoom).
+  const pixels = new Uint8Array(64 * 80 * 4);
+
+  if (previewPixels && id === currentChar) {
+    // Reuse the imported pixel data directly
+    pixels.set(previewPixels);
+  } else {
+    // Read from ROM tiles as normal
+    for (let ti = 0; ti < 80; ti++) {
+      const addr = addrs[ti];
+      const trow = Math.floor(ti / 8), tcol = ti % 8;
+      const isSharedTile = (addr === SHARED);
+
+      for (let py = 0; py < 8; py++) {
+        const b = isSharedTile
+          ? [0,0,0,0]
+          : [romBytes[addr+py*4], romBytes[addr+py*4+1], romBytes[addr+py*4+2], romBytes[addr+py*4+3]];
+        const row = [(b[0]>>4)&0xF,b[0]&0xF,(b[1]>>4)&0xF,b[1]&0xF,(b[2]>>4)&0xF,b[2]&0xF,(b[3]>>4)&0xF,b[3]&0xF];
+        for (let px = 0; px < 8; px++) {
+          const ix = tcol*8+px, iy = trow*8+py;
+          const oi = (iy*64+ix)*4;
+          const [r,g,b_] = palette[row[px]];
+          pixels[oi]=r; pixels[oi+1]=g; pixels[oi+2]=b_; pixels[oi+3]=255;
+        }
+      }
+    }
+  }
+
+  // Draw upscaled
+  const tmp = document.createElement('canvas');
+  tmp.width = 64; tmp.height = 80;
+  const tctx = tmp.getContext('2d');
+  const imgd = tctx.createImageData(64, 80);
+  imgd.data.set(pixels);
+  tctx.putImageData(imgd, 0, 0);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, 0, 0, 64*zoom, 80*zoom);
+  ctx.restore();
+
+  // Shared tile overlay
+  if (showShared) {
+    const octx = overlay.getContext('2d');
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    octx.fillStyle = 'rgba(255,160,0,0.18)';
+    octx.strokeStyle = 'rgba(255,160,0,0.5)';
+    octx.lineWidth = 1;
+    for (let ti = 0; ti < 80; ti++) {
+      if (addrs[ti] !== SHARED) continue;
+      const trow = Math.floor(ti/8), tcol = ti%8;
+      octx.fillRect(tcol*8*zoom, trow*8*zoom, 8*zoom, 8*zoom);
+      octx.strokeRect(tcol*8*zoom+0.5, trow*8*zoom+0.5, 8*zoom-1, 8*zoom-1);
+    }
+    overlay.classList.add('show');
+  } else {
+    overlay.classList.remove('show');
+  }
+
+  drawTileGrid();
+  setupCanvasHover(canvas, id, pixels);
+}
+
+function drawTileGrid() {
+  const overlay = document.getElementById('tile-overlay');
+  const octx = overlay.getContext('2d');
+  if (showGrid) {
+    // Parse gridColor hex to rgba with low opacity for subtlety
+    const r = parseInt(gridColor.slice(1,3),16);
+    const g = parseInt(gridColor.slice(3,5),16);
+    const b = parseInt(gridColor.slice(5,7),16);
+    octx.strokeStyle = `rgba(${r},${g},${b},0.35)`;
+    octx.lineWidth = 0.5;
+    for (let col = 0; col <= 8; col++) {
+      octx.beginPath();
+      octx.moveTo(col*8*zoom, 0);
+      octx.lineTo(col*8*zoom, 80*zoom);
+      octx.stroke();
+    }
+    for (let row = 0; row <= 10; row++) {
+      octx.beginPath();
+      octx.moveTo(0, row*8*zoom);
+      octx.lineTo(64*zoom, row*8*zoom);
+      octx.stroke();
+    }
+  }
+}
+
+function setupCanvasHover(canvas, id, pixels) {
+  canvas.onmousemove = e => {
+    const rect = canvas.getBoundingClientRect();
+    const px = Math.floor((e.clientX - rect.left) / zoom);
+    const py = Math.floor((e.clientY - rect.top)  / zoom);
+    if (px < 0 || px >= 64 || py < 0 || py >= 80) return;
+
+    if (cropSelectMode) {
+      // In crop-select mode: show the ghost selector instead of pixel info
+      drawCropGhost(Math.floor(px / 8), Math.floor(py / 8));
+      const sc = Math.min(Math.floor(px/8), 4);
+      const sr = Math.min(Math.floor(py/8), 6);
+      const cropByte = (sr << 4) | (sc + 2);
+      document.getElementById('pixel-text').textContent =
+        `crop byte 0x${cropByte.toString(16).padStart(2,'0').toUpperCase()}  (row ${sr}, col ${sc})  — click to confirm`;
+      document.getElementById('pixel-dot').style.background = '#00dcff';
+      return;
+    }
+
+    // Normal hover — pixel info
+    const oi = (py*64+px)*4;
+    const r = pixels[oi], g = pixels[oi+1], b = pixels[oi+2];
+    const hex = `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+    const ti = Math.floor(py/8)*8 + Math.floor(px/8);
+    const isShared = TILE_ADDRS[id][ti] === SHARED;
+    document.getElementById('pixel-dot').style.background = hex;
+    document.getElementById('pixel-text').textContent =
+      `(${px}, ${py})  ${hex.toUpperCase()}  tile ${ti}${isShared?' [SHARED]':''}`;
+  };
+
+  canvas.onclick = e => {
+    if (!cropSelectMode) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = Math.floor((e.clientX - rect.left) / zoom);
+    const py = Math.floor((e.clientY - rect.top)  / zoom);
+    if (px < 0 || px >= 64 || py < 0 || py >= 80) return;
+    applyCropFromCanvas(Math.floor(px / 8), Math.floor(py / 8));
+  };
+
+  canvas.onmouseleave = () => {
+    if (cropSelectMode) return;  // keep ghost visible if user briefly leaves
+    document.getElementById('pixel-dot').style.background = '';
+    document.getElementById('pixel-text').textContent = 'hover over portrait';
+  };
+}
+
+// ── Palette panel ─────────────────────────────────────────────────────────────
+function buildPalettePanel(id) {
+  const ch = CHARACTERS[id];
+  const pal = PALETTES[ch.group];
+  const grid = document.getElementById('palette-grid');
+  grid.innerHTML = '';
+  pal.forEach(([r,g,b], i) => {
+    const sw = document.createElement('div');
+    sw.className = 'pal-swatch';
+    sw.style.background = `rgb(${r},${g},${b})`;
+    sw.dataset.idx = i;
+    sw.title = `[${i}] #${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')} rgb(${r},${g},${b})`;
+    grid.appendChild(sw);
+  });
+
+  document.getElementById('pal-group-label').textContent = ch.group;
+  const peers = Object.entries(CHARACTERS)
+    .filter(([cid,c]) => c.group === ch.group && cid !== id)
+    .map(([,c]) => c.label).join(', ');
+  document.getElementById('pal-shared-label').textContent = peers || 'none';
+}
+
+// ── Info panel ────────────────────────────────────────────────────────────────
+function buildInfoPanel(id) {
+  const ch = CHARACTERS[id];
+  const addrs = TILE_ADDRS[id];
+  const nShared = addrs.filter(a => a === SHARED).length;
+  const grid = document.getElementById('info-grid');
+  grid.innerHTML = `
+    <span class="info-key">TILES</span>
+    <span class="info-val">80 total</span>
+    <span class="info-key">WRITABLE</span>
+    <span class="info-val green">${80 - nShared}</span>
+    <span class="info-key">SHARED</span>
+    <span class="info-val amber">${nShared} (read-only)</span>
+    <span class="info-key">PALETTE</span>
+    <span class="info-val">Group ${ch.group} · 16 colours</span>
+    <span class="info-key">STATUS</span>
+    <span class="info-val" id="info-status">READY</span>
+  `;
+}
+
+function setStatus(msg, cls='') {
+  const el = document.getElementById('info-status');
+  if (el) { el.textContent = msg; el.className = 'info-val ' + cls; }
+}
+
+// ── HUD Thumbnail panel ───────────────────────────────────────────────────────
+// The crop byte at charBlock+0x4F is a tile index (0-79) into the 8×10 portrait grid.
+// The HUD thumbnail reads 4 tiles wide × 4 tiles tall starting from that index.
+// Valid start: col 0-4 (so 4 tiles fit in 8-wide grid), row 0-6 (4 fit in 10-tall).
+
+function buildHUDPanel(id) {
+  const ch = CHARACTERS[id];
+  const cropByteAddr = ch.charBlock + 0x4F;
+
+  document.getElementById('hud-section').style.display = '';
+  document.getElementById('archetype-warning').style.display = ch.archetype ? '' : 'none';
+
+  const romCrop = romBytes ? romBytes[cropByteAddr] : ch.crop;
+  cropOffset = romCrop;
+
+  document.getElementById('crop-addr').textContent = `0x${cropByteAddr.toString(16).toUpperCase()}`;
+  updateCropDisplay(romCrop);
+
+  document.getElementById('btn-select-crop').disabled = !romBytes;
+  document.getElementById('btn-write-crop').disabled = true;
+
+  renderHUDThumb(id);
+}
+
+function updateCropDisplay(romCrop) {
+  const isPending = cropOffset !== romCrop;
+  document.getElementById('crop-val').textContent =
+    `0x${cropOffset.toString(16).padStart(2,'0').toUpperCase()}`;
+  document.getElementById('crop-val').style.color = isPending ? 'var(--amber)' : 'var(--green)';
+  document.getElementById('crop-rom-val').textContent =
+    `0x${(romCrop !== undefined ? romCrop : cropOffset).toString(16).padStart(2,'0').toUpperCase()}`;
+  document.getElementById('btn-write-crop').disabled = !isPending || !romBytes;
+}
+
+function renderHUDThumb(id) {
+  const canvas = document.getElementById('hud-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 64, 80);
+  if (!romBytes) return;
+
+  const ch = CHARACTERS[id];
+  const palette = PALETTES[ch.group];
+  const addrs = TILE_ADDRS[id];
+
+  // Draw full portrait into imgd
+  const imgd = ctx.createImageData(64, 80);
+  for (let ti = 0; ti < 80; ti++) {
+    const addr = addrs[ti];
+    const trow = Math.floor(ti/8), tcol = ti%8;
+    const bytes = (addr === SHARED) ? new Uint8Array(32).fill(0x11) : romBytes.slice(addr, addr+32);
+    for (let py = 0; py < 8; py++) {
+      const b0=bytes[py*4],b1=bytes[py*4+1],b2=bytes[py*4+2],b3=bytes[py*4+3];
+      const row=[(b0>>4)&0xF,b0&0xF,(b1>>4)&0xF,b1&0xF,(b2>>4)&0xF,b2&0xF,(b3>>4)&0xF,b3&0xF];
+      for (let px = 0; px < 8; px++) {
+        const oi=((trow*8+py)*64+(tcol*8+px))*4;
+        const [r,g,b_]=palette[row[px]];
+        imgd.data[oi]=r; imgd.data[oi+1]=g; imgd.data[oi+2]=b_; imgd.data[oi+3]=255;
+      }
+    }
+  }
+  ctx.putImageData(imgd, 0, 0);
+
+  // Decode crop byte: high nibble = nametable row, low nibble = nametable col
+  // Portrait starts at nametable col 2, so portrait-relative col = (low_nibble - 2)
+  const cropRow = (cropOffset >> 4) & 0xF;
+  const cropCol = (cropOffset & 0xF) - 2;  // subtract nametable base offset
+  const cx = cropCol * 8, cy = cropRow * 8;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, 64, 80);
+
+  const cropPx = ctx.createImageData(32, 32);
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      if (cx+x >= 64 || cy+y >= 80) continue;
+      const si = ((cy+y)*64+(cx+x))*4, di = (y*32+x)*4;
+      cropPx.data[di]=imgd.data[si]; cropPx.data[di+1]=imgd.data[si+1];
+      cropPx.data[di+2]=imgd.data[si+2]; cropPx.data[di+3]=255;
+    }
+  }
+  ctx.putImageData(cropPx, cx, cy);
+  ctx.strokeStyle = '#ffaa00';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx+0.5, cy+0.5, 31, 31);
+}
+
+// ── Sprite ID Functions ───────────────────────────────────────────────────
+
+function loadSpriteID() {
+  if (!romBytes || currentChar === null) return;
+  
+  const ch = CHARACTERS[currentChar];
+  const spriteAddr = ch.charBlock + 0x09;
+  const spriteID = romBytes[spriteAddr];
+  const select = document.getElementById('sprite-select');
+  
+  // Set dropdown to current sprite ID
+  const hexValue = spriteID.toString(16).toUpperCase().padStart(2, '0');
+  select.value = hexValue;
+  select.disabled = false;
+  
+  // Show ROM address
+  document.getElementById('sprite-addr').textContent = 
+    `0x${spriteAddr.toString(16).toUpperCase().padStart(6, '0')} = 0x${hexValue}`;
+  
+  // Show sprite section
+  document.getElementById('sprite-section').style.display = 'block';
+}
+
+function updateSpriteID() {
+  if (!romBytes || currentChar === null) return;
+  
+  const select = document.getElementById('sprite-select');
+  const newSpriteID = parseInt(select.value, 16);
+  const ch = CHARACTERS[currentChar];
+  const spriteAddr = ch.charBlock + 0x09;
+  
+  // Write new sprite ID to ROM
+  romBytes[spriteAddr] = newSpriteID;
+  document.getElementById('btn-save-rom').disabled = false;
+  
+  // Update address display
+  document.getElementById('sprite-addr').textContent = 
+    `0x${spriteAddr.toString(16).toUpperCase().padStart(6, '0')} = 0x${select.value}`;
+  
+  log(`Sprite ID changed to 0x${select.value}`, 'ok');
+}
+
+// ── Crop-select mode ──────────────────────────────────────────────────────────
+function enterCropSelect() {
+  if (!currentChar || !romBytes) return;
+  cropSelectMode = true;
+  const btn = document.getElementById('btn-select-crop');
+  btn.classList.add('active');
+  btn.textContent = '✕ CANCEL';
+  btn.onclick = exitCropSelect;
+  document.getElementById('canvas-wrap').classList.add('crop-select-mode');
+  if (!showGrid) { showGrid = true; document.getElementById('toggle-grid').classList.add('on'); }
+  renderPortrait(currentChar);
+  log('Crop select active — hover over the portrait to preview, click to confirm.', 'info');
+}
+
+function exitCropSelect() {
+  cropSelectMode = false;
+  const btn = document.getElementById('btn-select-crop');
+  btn.classList.remove('active');
+  btn.textContent = '◈ SELECT AREA';
+  btn.onclick = enterCropSelect;
+  document.getElementById('canvas-wrap').classList.remove('crop-select-mode');
+  renderPortrait(currentChar);
+}
+
+function drawCropGhost(tileCol, tileRow) {
+  const overlay = document.getElementById('tile-overlay');
+  const octx = overlay.getContext('2d');
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  // Redraw shared-tile highlights and grid underneath
+  if (showShared) {
+    const addrs = TILE_ADDRS[currentChar];
+    octx.fillStyle = 'rgba(255,160,0,0.18)';
+    octx.strokeStyle = 'rgba(255,160,0,0.5)';
+    octx.lineWidth = 1;
+    for (let ti = 0; ti < 80; ti++) {
+      if (addrs[ti] !== SHARED) continue;
+      const tr = Math.floor(ti/8), tc = ti%8;
+      octx.fillRect(tc*8*zoom, tr*8*zoom, 8*zoom, 8*zoom);
+      octx.strokeRect(tc*8*zoom+0.5, tr*8*zoom+0.5, 8*zoom-1, 8*zoom-1);
+    }
+  }
+  drawTileGrid();
+
+  // Clamp so 4×4 box stays fully within the portrait
+  // portrait-relative col 0–4 (nametable col 2–6), row 0–6
+  const sc = Math.min(Math.max(tileCol, 0), 4);
+  const sr = Math.min(Math.max(tileRow, 0), 6);
+  const px = sc * 8 * zoom, py = sr * 8 * zoom;
+  const sz = 32 * zoom;
+
+  // Ghost fill + dashed border
+  octx.fillStyle = 'rgba(0,220,255,0.15)';
+  octx.fillRect(px, py, sz, sz);
+  octx.setLineDash([Math.max(3, 3*zoom/4), Math.max(2, 2*zoom/4)]);
+  octx.strokeStyle = 'rgba(0,220,255,0.85)';
+  octx.lineWidth = 1.5;
+  octx.strokeRect(px+0.75, py+0.75, sz-1.5, sz-1.5);
+  octx.setLineDash([]);
+
+  // Corner brackets
+  const b = Math.max(6, 5*zoom/4);
+  octx.strokeStyle = '#00dcff';
+  octx.lineWidth = Math.max(1.5, zoom/2);
+  [[px,py,1,1],[px+sz,py,-1,1],[px,py+sz,1,-1],[px+sz,py+sz,-1,-1]].forEach(([cx,cy,sx,sy]) => {
+    octx.beginPath(); octx.moveTo(cx+sx*b, cy); octx.lineTo(cx, cy); octx.lineTo(cx, cy+sy*b); octx.stroke();
+  });
+
+  // Show the crop byte value this position would produce
+  const cropByte = (sr << 4) | (sc + 2);  // high nibble=row, low nibble=nametable col (portrait col + 2)
+  const fs = Math.max(9, Math.min(13, zoom*2));
+  octx.font = `bold ${fs}px "Share Tech Mono", monospace`;
+  octx.fillStyle = '#00dcff';
+  octx.shadowColor = '#001a1f';
+  octx.shadowBlur = 3;
+  octx.fillText(`0x${cropByte.toString(16).padStart(2,'0').toUpperCase()}`, px+4, py+fs+2);
+  octx.shadowBlur = 0;
+}
+
+function applyCropFromCanvas(tileCol, tileRow) {
+  const sc = Math.min(Math.max(tileCol, 0), 4);
+  const sr = Math.min(Math.max(tileRow, 0), 6);
+  cropOffset = (sr << 4) | (sc + 2);  // high nibble=nametable row, low nibble=nametable col
+  const romCrop = romBytes[CHARACTERS[currentChar].charBlock + 0x4F];
+  updateCropDisplay(romCrop);
+  renderHUDThumb(currentChar);
+  log(`Crop set → 0x${cropOffset.toString(16).padStart(2,'0').toUpperCase()} (portrait row ${sr}, col ${sc}) — click WRITE CROP BYTE to save`, 'ok');
+  exitCropSelect();
+}
+
+function writeCrop() {
+  if (!currentChar || !romBytes) return;
+  const ch = CHARACTERS[currentChar];
+  const cropByteAddr = ch.charBlock + 0x4F;
+  const oldVal = romBytes[cropByteAddr];
+  romBytes[cropByteAddr] = cropOffset;
+
+  document.getElementById('crop-rom-val').textContent =
+    `0x${cropOffset.toString(16).padStart(2,'0').toUpperCase()}`;
+  document.getElementById('crop-val').style.color = 'var(--green)';
+  document.getElementById('btn-write-crop').disabled = true;
+  document.getElementById('btn-save-rom').disabled = false;
+
+  log(`Crop byte written: ${ch.label} @ 0x${cropByteAddr.toString(16).toUpperCase()} · 0x${oldVal.toString(16).padStart(2,'0')} → 0x${cropOffset.toString(16).padStart(2,'0').toUpperCase()}`, 'ok');
+  setStatus('CROP PATCHED ✓', 'green');
+}
+
+// ── Export PNG ────────────────────────────────────────────────────────────────
+function exportPNG() {
+  if (!currentChar || !romBytes) return;
+  const id = currentChar;
+  const palette = PALETTES[CHARACTERS[id].group];
+  const addrs = TILE_ADDRS[id];
+
+  const tmp = document.createElement('canvas');
+  tmp.width = 64; tmp.height = 80;
+  const ctx = tmp.getContext('2d');
+  const imgd = ctx.createImageData(64, 80);
+
+  for (let ti = 0; ti < 80; ti++) {
+    const addr = addrs[ti];
+    if (addr === SHARED) continue;
+    const trow = Math.floor(ti/8), tcol = ti%8;
+    for (let py = 0; py < 8; py++) {
+      const b0=romBytes[addr+py*4],b1=romBytes[addr+py*4+1],
+            b2=romBytes[addr+py*4+2],b3=romBytes[addr+py*4+3];
+      const row=[(b0>>4)&0xF,b0&0xF,(b1>>4)&0xF,b1&0xF,(b2>>4)&0xF,b2&0xF,(b3>>4)&0xF,b3&0xF];
+      for (let px = 0; px < 8; px++) {
+        const ix=tcol*8+px, iy=trow*8+py;
+        const oi=(iy*64+ix)*4;
+        const [r,g,b_]=palette[row[px]];
+        imgd.data[oi]=r; imgd.data[oi+1]=g; imgd.data[oi+2]=b_; imgd.data[oi+3]=255;
+      }
+    }
+  }
+  ctx.putImageData(imgd, 0, 0);
+
+  tmp.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${id}.png`;
+    a.click();
+    log(`Exported ${id}.png (64×80 px, ${CHARACTERS[id].group} palette)`, 'ok');
+  }, 'image/png');
+}
+
+// ── Import PNG ────────────────────────────────────────────────────────────────
+document.getElementById('png-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file || !currentChar) return;
+  const img = new Image();
+  img.onload = () => {
+    if (img.width !== 64 || img.height !== 80) {
+      log(`ERROR: PNG must be 64×80 px, got ${img.width}×${img.height}`, 'err');
+      return;
+    }
+    const tmp = document.createElement('canvas');
+    tmp.width = 64; tmp.height = 80;
+    const ctx = tmp.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    pendingPixels = ctx.getImageData(0, 0, 64, 80).data;
+    previewPixels = pendingPixels;  // keep a reference so re-renders use the preview
+    isDirty = true;
+
+    // Show preview on main canvas
+    const canvas = document.getElementById('portrait-canvas');
+    const mctx = canvas.getContext('2d');
+    mctx.imageSmoothingEnabled = false;
+    mctx.drawImage(tmp, 0, 0, 64*zoom, 80*zoom);
+
+    document.getElementById('btn-patch').disabled = false;
+    document.getElementById('btn-save-rom').disabled = false;
+    setStatus('PENDING PATCH', 'amber');
+    log(`Imported ${file.name} — click "Patch ROM" to apply`, 'warn');
+    e.target.value = '';
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+// ── Snap colour ───────────────────────────────────────────────────────────────
+function snapColour(r, g, b, palette) {
+  let bestIdx = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const [pr,pg,pb] = palette[i];
+    const d = (r-pr)**2 + (g-pg)**2 + (b-pb)**2;
+    if (d <= bestDist) { bestDist = d; bestIdx = i; } // >= keeps highest on tie (0↔1 black)
+  }
+  return bestIdx;
+}
+
+// ── Patch ROM ─────────────────────────────────────────────────────────────────
+function patchROM() {
+  if (!currentChar || !romBytes || !pendingPixels) return;
+  const id = currentChar;
+  const palette = PALETTES[CHARACTERS[id].group];
+  const addrs = TILE_ADDRS[id];
+  let written = 0, skipped = 0, snapped = 0;
+
+  for (let ti = 0; ti < 80; ti++) {
+    const addr = addrs[ti];
+    const trow = Math.floor(ti/8), tcol = ti%8;
+
+    // Build tile from pending pixels
+    const tileBytes = new Uint8Array(32);
+    for (let py = 0; py < 8; py++) {
+      for (let px = 0; px < 8; px+=2) {
+        const ix0=tcol*8+px,   iy=trow*8+py;
+        const ix1=tcol*8+px+1;
+        const oi0=(iy*64+ix0)*4, oi1=(iy*64+ix1)*4;
+        const pidx0 = snapColour(pendingPixels[oi0],pendingPixels[oi0+1],pendingPixels[oi0+2],palette);
+        const pidx1 = snapColour(pendingPixels[oi1],pendingPixels[oi1+1],pendingPixels[oi1+2],palette);
+        const [pr0,pg0,pb0]=palette[pidx0], [pr1,pg1,pb1]=palette[pidx1];
+        if(pendingPixels[oi0]!==pr0||pendingPixels[oi0+1]!==pg0||pendingPixels[oi0+2]!==pb0) snapped++;
+        if(pendingPixels[oi1]!==pr1||pendingPixels[oi1+1]!==pg1||pendingPixels[oi1+2]!==pb1) snapped++;
+        tileBytes[py*4 + px/2] = (pidx0<<4)|pidx1;
+      }
+    }
+
+    if (addr === SHARED) {
+      const isBlank = tileBytes.every(b => b===0);
+      if (!isBlank) log(`Tile ${ti}: shared tile — changes ignored`, 'warn');
+      skipped++;
+      continue;
+    }
+    romBytes.set(tileBytes, addr);
+    written++;
+  }
+
+  pendingPixels = null;
+  previewPixels = null;
+  isDirty = false;
+  document.getElementById('btn-save-rom').disabled = false;
+  setStatus('PATCHED ✓', 'green');
+
+  // Refresh thumbnail and portrait
+  renderPortrait(id);
+  renderThumb(id);
+  renderHUDThumb(id);
+
+  log(`Patched ${CHARACTERS[id].label}: ${written} tiles written, ${skipped} shared skipped${snapped ? ', ' + snapped + ' px snapped' : ''}`, 'ok');
+}
+
+// ── Save patched ROM ──────────────────────────────────────────────────────────
+function saveROM() {
+  if (!romBytes) return;
+  const blob = new Blob([romBytes], { type: 'application/octet-stream' });
+  const a = document.createElement('a');
+  const outName = romFilename.replace(/(\.[^.]+)$/, '_patched$1') || 'shadowrun_patched.md';
+  a.href = URL.createObjectURL(blob);
+  a.download = outName;
+  a.click();
+  log(`Saved patched ROM: ${outName}`, 'ok');
+  setStatus('SAVED ✓', 'green');
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+function setZoom(z) {
+  zoom = Math.max(1, Math.min(8, z));
+  document.getElementById('zoom-val').textContent = zoom + '×';
+  if (currentChar) renderPortrait(currentChar);
+}
+
+// ── Toggles ───────────────────────────────────────────────────────────────────
+function toggleGrid() {
+  showGrid = !showGrid;
+  document.getElementById('toggle-grid').classList.toggle('on', showGrid);
+  if (currentChar) renderPortrait(currentChar);
+}
+function toggleShared() {
+  showShared = !showShared;
+  document.getElementById('toggle-shared').classList.toggle('on', showShared);
+  if (currentChar) renderPortrait(currentChar);
+}
+function setGridColor(hex) {
+  gridColor = hex;
+  if (showGrid && currentChar) renderPortrait(currentChar);
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function log(msg, type='') {
+  const area = document.getElementById('log-area');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  const t = new Date().toTimeString().slice(0,8);
+  line.textContent = `[${t}] ${msg}`;
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+  // Keep max 200 lines
+  while (area.children.length > 200) area.removeChild(area.firstChild);
+}
+
+log('Editor ready. Load a Shadowrun (USA).md ROM file to begin.', 'info');
+</script>
+</body>
+</html>
