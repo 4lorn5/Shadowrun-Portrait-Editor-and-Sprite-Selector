@@ -10,12 +10,13 @@ The Shadowrun Portrait Editor and Sprite Selector is an editor for Shadowrun on 
 - Export and import party member portraits as .png files
 - Portrait preview (old and new)
 - Generates ready to play ROM file (requires original ROM)
-- HTML and Python versions (lightweight, portable)
+- HTML (lightweight, portable)
 
 
 ## Running the Editor:
 
 * HMTL: Just save file as .html and double-click from your local folder; it will open in your default browser.
+* Online: The editor is live at: https://4lorn5.github.io/Shadowrun-Portrait-Editor-and-Sprite-Selector/
 
 
 ## Usage:
