@@ -9,7 +9,7 @@ The Shadowrun Portrait Editor and Sprite Selector is an editor for Shadowrun on 
 - Load ROM in common formats (.smd, .bin, .gen, and .md)
 - Export and import party member portraits as .png files
 - Portrait preview (old and new)
-- Generates ready to play ROM file (requires original ROM)
+- Generates ready to play ROM file (requires original ROM and changes made)
 - HTML (lightweight, portable)
 
 
